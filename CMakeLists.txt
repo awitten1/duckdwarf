@@ -26,6 +26,10 @@ set(EXTENSION_SOURCES src/dwarf.cpp)
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
+target_compile_definitions(${EXTENSION_NAME} PRIVATE LIBDWARF_STATIC)
+target_link_libraries(${EXTENSION_NAME} ${LIBDWARF_STATIC_LIBRARIES})
+target_include_directories(${EXTENSION_NAME} PRIVATE ${LIBDWARF_STATIC_INCLUDE_DIRS})
+
 # Link OpenSSL in both the static library as the loadable extension
 target_link_libraries(${EXTENSION_NAME} OpenSSL::SSL OpenSSL::Crypto)
 target_link_libraries(${LOADABLE_EXTENSION_NAME} OpenSSL::SSL OpenSSL::Crypto)
