@@ -37,21 +37,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(quack_openssl_version_scalar_function);
 }
 
-void QuackExtension::Load(ExtensionLoader &loader) {
-	LoadInternal(loader);
-}
-std::string QuackExtension::Name() {
-	return "dwarf";
-}
-
-std::string QuackExtension::Version() const {
-#ifdef EXT_VERSION_QUACK
-	return EXT_VERSION_QUACK;
-#else
-	return "";
-#endif
-}
-
 } // namespace duckdb
 
 extern "C" {
