@@ -1,6 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "quack_extension.hpp"
+#include "dwarf_extension.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -41,7 +41,7 @@ void QuackExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
 std::string QuackExtension::Name() {
-	return "quack";
+	return "dwarf";
 }
 
 std::string QuackExtension::Version() const {

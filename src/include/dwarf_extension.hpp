@@ -1,8 +1,13 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
+
+class DwarfExtension : StorageExtension {
+
+};
 
 class QuackExtension : public Extension {
 public:

@@ -1,2 +1,9 @@
+# First, cd duckdb && make clangd
+If:
+  PathMatch: duckdb/.*
+CompileFlags:
+  CompilationDatabase: duckdb/build/clangd
+---
+# make debug generates this.
 CompileFlags:
   CompilationDatabase: build/debug
