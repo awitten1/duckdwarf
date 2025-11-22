@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
 	d.ForEachDie([](const Dwarf::Die& d) {
 		cout << endl << d.tag << endl;
 		for (const auto& attr : d.attributes) {
-			cout << '\t' << attr.name << " = " << attr.value << endl;
+			cout << '\t' << attr.name << " = " << attr.value << " form: " << attr.form << endl;
 		}
 	});
 

@@ -31,8 +31,10 @@ public:
         Dwarf_Error error = 0;
         int res;
 
+		char true_path_out[4096];
+
         res = dwarf_init_path(filename.c_str(),
-                            NULL, 0,
+                            true_path_out, sizeof(true_path_out),
                             DW_GROUPNUMBER_ANY,
                             NULL, NULL,
                             &dbg,
@@ -40,8 +42,13 @@ public:
 
         if (res == DW_DLV_ERROR) {
             char *errmsg = dwarf_errmsg(error);
+			std::string err_str = errmsg ? errmsg : "Unknown error";
             fprintf(stderr, "Error: %s\n", errmsg);
             dwarf_dealloc_error(dbg, error);
+			throw std::runtime_error("Dwarf initialization failed: " + err_str);
+        }
+		if (res == DW_DLV_NO_ENTRY) {
+            throw std::runtime_error("File not found or not a supported object file: " + filename);
         }
     }
 
