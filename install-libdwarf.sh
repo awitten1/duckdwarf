@@ -16,11 +16,10 @@ fi
 
 tar -xJvf ${dir}.tar.xz
 
-pushd $dir
-
-install_dir=$basedir/libdwarf-install
-mkdir -p "$install_dir"
-./configure --prefix="$install_dir" && make && make install
+install_dir=$(realpath ${1:-$basedir/libdwarf-install})
+mkdir -p $install_dir 
+echo "installing libdwarf into $install_dir"
+(cd $dir && ./configure --prefix="$install_dir" && make && make install)
 
 popd
 

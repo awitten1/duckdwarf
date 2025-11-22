@@ -26,6 +26,14 @@ set(EXTENSION_SOURCES src/dwarf.cpp)
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
+message(STATUS "LIBDWARF_STATIC_LDFLAGS = ${LIBDWARF_STATIC_LDFLAGS}")
+add_executable(main main.cpp)
+target_include_directories(main PRIVATE src/include)
+target_link_libraries(main ${LIBDWARF_STATIC_LDFLAGS})
+target_include_directories(main PRIVATE ${LIBDWARF_STATIC_INCLUDE_DIRS})
+target_compile_definitions(main PRIVATE LIBDWARF_STATIC)
+
+
 target_compile_definitions(${EXTENSION_NAME} PRIVATE LIBDWARF_STATIC)
 target_link_libraries(${EXTENSION_NAME} ${LIBDWARF_STATIC_LIBRARIES})
 target_include_directories(${EXTENSION_NAME} PRIVATE ${LIBDWARF_STATIC_INCLUDE_DIRS})
