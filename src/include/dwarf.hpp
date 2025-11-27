@@ -1,9 +1,10 @@
+#pragma once
+
 #include <functional>
 #include <string>
 #include <vector>
 #include <iostream>
 #include <sstream>
-#include <iomanip>
 #include <cstring>
 
 // supposed to include dwarf.h before libdwarf.h
@@ -24,6 +25,8 @@ public:
     struct Die {
         std::string tag;
         Dwarf_Off offset;
+		Dwarf_Off parent_die;
+		std::string section;
         std::vector<Attribute> attributes;
     };
 
@@ -89,7 +92,7 @@ public:
                 break;
             }
 
-            ProcessDie(cu_die, callback);
+            ProcessDie(cu_die, -1, callback);
         }
     }
 
@@ -102,7 +105,7 @@ public:
 private:
     Dwarf_Debug dbg = 0;
 
-    void ProcessDie(Dwarf_Die current_die, std::function<void(const Die&)>& callback) {
+    void ProcessDie(Dwarf_Die current_die, Dwarf_Off parent_die, std::function<void(const Die&)>& callback) {
         Dwarf_Error error = 0;
         int res;
 
@@ -110,7 +113,12 @@ private:
             Die cppDie;
 
             cppDie.tag = GetTagName(current_die);
+			cppDie.parent_die = parent_die;
             dwarf_dieoffset(current_die, &cppDie.offset, &error);
+			const char* sec_name = nullptr;
+    		Dwarf_Error error = 0;
+        	dwarf_get_die_section_name_b(current_die, &sec_name, &error);
+			cppDie.section = sec_name;
 
             GetDieAttributes(current_die, cppDie.attributes);
 
@@ -124,7 +132,7 @@ private:
                 dwarf_dealloc_die(current_die);
                 return;
             } else if (res == DW_DLV_OK) {
-                ProcessDie(child_die, callback);
+                ProcessDie(child_die, cppDie.offset, callback);
             }
 
             Dwarf_Die sibling_die = 0;
@@ -233,13 +241,27 @@ private:
         }
 
         if (form == DW_FORM_ref_addr || form == DW_FORM_ref1 || form == DW_FORM_ref2 ||
-            form == DW_FORM_ref4 || form == DW_FORM_ref8 || form == DW_FORM_ref_udata) {
+            form == DW_FORM_ref4 || form == DW_FORM_ref8 || form == DW_FORM_ref_udata ||
+			form == DW_FORM_sec_offset) {
 
             Dwarf_Off off = 0;
             res = dwarf_global_formref(attr, &off, &error);
             if (res == DW_DLV_OK) {
                 stringstream ss;
-                ss << "<0x" << std::hex << off << ">";
+                ss << "0x" << std::hex << off;
+                return ss.str();
+            }
+        }
+
+		if (form == DW_FORM_exprloc) {
+            Dwarf_Unsigned expr_len = 0;
+            Dwarf_Ptr block_ptr = nullptr;
+
+            // dwarf_formexprloc returns the pointer and length
+            res = dwarf_formexprloc(attr, &expr_len, &block_ptr, &error);
+            if (res == DW_DLV_OK) {
+                stringstream ss;
+                ss << "(exprloc=" << block_ptr << ",len=" << expr_len << ")";
                 return ss.str();
             }
         }

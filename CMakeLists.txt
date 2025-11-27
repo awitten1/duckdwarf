@@ -21,7 +21,6 @@ set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_LIST_DIR}/${LIBDWARF_INSTALL_DIR}" ${CMAK
 pkg_check_modules(LIBDWARF REQUIRED libdwarf)
 
 set(EXTENSION_SOURCES src/dwarf_extension.cpp)
-set(EXTENSION_SOURCES src/dwarf.cpp)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
@@ -32,11 +31,12 @@ target_include_directories(main PRIVATE src/include)
 target_link_libraries(main ${LIBDWARF_STATIC_LDFLAGS})
 target_include_directories(main PRIVATE ${LIBDWARF_STATIC_INCLUDE_DIRS})
 target_compile_definitions(main PRIVATE LIBDWARF_STATIC)
+target_compile_options(main PRIVATE "-g")
 
 
-target_compile_definitions(${EXTENSION_NAME} PRIVATE LIBDWARF_STATIC)
-target_link_libraries(${EXTENSION_NAME} ${LIBDWARF_STATIC_LIBRARIES})
-target_include_directories(${EXTENSION_NAME} PRIVATE ${LIBDWARF_STATIC_INCLUDE_DIRS})
+target_compile_definitions(${EXTENSION_NAME} PUBLIC LIBDWARF_STATIC)
+target_link_libraries(${EXTENSION_NAME} ${LIBDWARF_STATIC_LDFLAGS})
+target_include_directories(${EXTENSION_NAME} PUBLIC ${LIBDWARF_STATIC_INCLUDE_DIRS})
 
 # Link OpenSSL in both the static library as the loadable extension
 target_link_libraries(${EXTENSION_NAME} OpenSSL::SSL OpenSSL::Crypto)

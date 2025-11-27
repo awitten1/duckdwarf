@@ -8,7 +8,9 @@ int main(int argc, char** argv) {
 
 
 	d.ForEachDie([](const Dwarf::Die& d) {
-		cout << endl << d.tag << endl;
+		cout << endl << "tag = " << d.tag << endl;
+		cout << endl << "section = " << d.tag << endl;
+		cout << "offset = 0x" << hex << d.offset << endl;
 		for (const auto& attr : d.attributes) {
 			cout << '\t' << attr.name << " = " << attr.value << " form: " << attr.form << endl;
 		}

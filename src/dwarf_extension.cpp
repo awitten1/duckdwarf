@@ -1,3 +1,7 @@
+
+#include "duckdb/common/helper.hpp"
+#include "duckdb/function/function.hpp"
+#include "dwarf.hpp"
 #define DUCKDB_EXTENSION_MAIN
 
 #include "dwarf_extension.hpp"
@@ -5,43 +9,109 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/client_context.hpp"
 
-// OpenSSL linked through vcpkg
-#include <openssl/opensslv.h>
 
 namespace duckdb {
 
-inline void QuackScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &name_vector = args.data[0];
-	UnaryExecutor::Execute<string_t, string_t>(name_vector, result, args.size(), [&](string_t name) {
-		return StringVector::AddString(result, "Quack " + name.GetString() + " 🐥");
-	});
+
+struct DwarfFunctionData : public FunctionData {
+	explicit DwarfFunctionData(string dwarf_file) : dwarf_file(std::move(dwarf_file)) {}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<DwarfFunctionData>(dwarf_file);
+	}
+	bool Equals(const FunctionData &other) const override {
+		return dynamic_cast<const DwarfFunctionData&>(other).dwarf_file == dwarf_file;
+	}
+
+	string dwarf_file;
+};
+
+static unique_ptr<FunctionData> BindDwarfFunction(ClientContext& context, TableFunctionBindInput& input,
+	vector<LogicalType>& return_types, vector<string>& names) {
+
+	return_types.push_back(LogicalType::VARCHAR);
+	names.push_back("dwarf_tag");
+
+	return_types.push_back(LogicalType::BIGINT);
+	names.push_back("dwarf_offset");
+
+	return_types.push_back(LogicalType::VARCHAR);
+	names.push_back("dwarf_section");
+
+	return_types.push_back(LogicalType::BIGINT);
+	names.push_back("dwarf_offset");
+
+	return_types.push_back(LogicalType::BIGINT);
+	names.push_back("parent_dwarf_offset");
+
+	return_types.push_back(
+		LogicalType::LIST(
+			LogicalType::STRUCT(
+				{
+					{"dwarf_attr_key",LogicalType::VARCHAR},
+					{"dwarf_attr_value",LogicalType::VARCHAR},
+					{"dwarf_attr_form",LogicalType::VARCHAR}
+				}
+			)
+		)
+	);
+	names.push_back("parent_dwarf_offset");
+
+	auto dwarf_file = input.inputs[0].ToString();
+
+	return make_uniq<DwarfFunctionData>(dwarf_file);
 }
 
-inline void QuackOpenSSLVersionScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &name_vector = args.data[0];
-	UnaryExecutor::Execute<string_t, string_t>(name_vector, result, args.size(), [&](string_t name) {
-		return StringVector::AddString(result, "Quack " + name.GetString() + ", my linked OpenSSL version is " +
-		                                           OPENSSL_VERSION_TEXT);
-	});
+struct DwarfFileState : public GlobalTableFunctionState {
+	explicit DwarfFileState(const DwarfFunctionData& input) : dw(input.dwarf_file) {}
+	Dwarf dw;
+};
+
+inline void DwarfTableFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto& dwarf_state = dynamic_cast<const DwarfFileState&>(*data.global_state);
+	(void)dwarf_state;
+}
+
+unique_ptr<GlobalTableFunctionState> InitDwarfState(ClientContext &context, TableFunctionInitInput &input) {
+	auto& bind_data = dynamic_cast<const DwarfFunctionData&>(*input.bind_data);
+	return make_uniq<DwarfFileState>(bind_data);
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-	// Register a scalar function
-	auto quack_scalar_function = ScalarFunction("quack", {LogicalType::VARCHAR}, LogicalType::VARCHAR, QuackScalarFun);
-	loader.RegisterFunction(quack_scalar_function);
 
-	// Register another scalar function
-	auto quack_openssl_version_scalar_function = ScalarFunction("quack_openssl_version", {LogicalType::VARCHAR},
-	                                                            LogicalType::VARCHAR, QuackOpenSSLVersionScalarFun);
-	loader.RegisterFunction(quack_openssl_version_scalar_function);
+	TableFunction t("dwarf_info", {duckdb::LogicalType::VARCHAR}, DwarfTableFunction,
+	              BindDwarfFunction, InitDwarfState);
+
+	loader.RegisterFunction(t);
+
+}
+
+void DwarfExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
+}
+
+std::string DwarfExtension::Name() {
+	return "dwarf";
+}
+
+std::string DwarfExtension::Version() const {
+#ifdef EXT_VERSION_DWARF
+	return EXT_VERSION_DWARF;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb
 
 extern "C" {
 
-DUCKDB_CPP_EXTENSION_ENTRY(quack, loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(dwarf, loader) {
 	duckdb::LoadInternal(loader);
 }
 }
