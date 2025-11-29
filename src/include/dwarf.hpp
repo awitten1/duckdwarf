@@ -38,10 +38,8 @@ public:
         Dwarf_Unsigned next_cu_header_offset_ = 0;
 
     public:
-        explicit iterator(Dwarf_Debug dbg, bool is_end = false) : dbg_(dbg), is_end_(is_end) {
-            if (is_end_) {
-                return;
-            }
+		explicit iterator(bool is_end) : is_end_(is_end) {}
+        explicit iterator(Dwarf_Debug dbg) : dbg_(dbg), is_end_(false) {
 
             Dwarf_Unsigned cu_header_length = 0;
             Dwarf_Half version_stamp = 0;
@@ -191,7 +189,7 @@ public:
 
     explicit Dwarf(const std::string& filename) : filename_(filename) {}
 
-    iterator begin() {
+    iterator begin() const {
         Dwarf_Error error = 0;
         int res;
 
@@ -216,23 +214,15 @@ public:
             throw std::runtime_error("File not found or not a supported object file: " + filename_);
         }
 
-        dbg_ = dbg;
         return iterator(dbg);
     }
 
-    iterator end() {
-        return iterator(dbg_, true);
-    }
-
-    ~Dwarf() {
-        if (dbg_) {
-            dwarf_finish(dbg_);
-        }
+    iterator end() const {
+        return iterator(true);
     }
 
 private:
     std::string filename_;
-    Dwarf_Debug dbg_ = nullptr;
 
     static void GetDieAttributes(Dwarf_Die die, std::vector<Attribute>& out_attrs) {
         Dwarf_Attribute* attrbuf = 0;

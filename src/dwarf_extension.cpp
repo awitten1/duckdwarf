@@ -1,5 +1,6 @@
 
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/function.hpp"
 #include "dwarf.hpp"
 #define DUCKDB_EXTENSION_MAIN
@@ -44,9 +45,6 @@ static unique_ptr<FunctionData> BindDwarfFunction(ClientContext& context, TableF
 	names.push_back("dwarf_section");
 
 	return_types.push_back(LogicalType::BIGINT);
-	names.push_back("dwarf_offset");
-
-	return_types.push_back(LogicalType::BIGINT);
 	names.push_back("parent_dwarf_offset");
 
 	return_types.push_back(
@@ -60,7 +58,7 @@ static unique_ptr<FunctionData> BindDwarfFunction(ClientContext& context, TableF
 			)
 		)
 	);
-	names.push_back("parent_dwarf_offset");
+	names.push_back("dwarf_attributes");
 
 	auto dwarf_file = input.inputs[0].ToString();
 
@@ -68,13 +66,39 @@ static unique_ptr<FunctionData> BindDwarfFunction(ClientContext& context, TableF
 }
 
 struct DwarfFileState : public GlobalTableFunctionState {
-	explicit DwarfFileState(const DwarfFunctionData& input) : dw(input.dwarf_file) {}
+	explicit DwarfFileState(const DwarfFunctionData& input) : dw(input.dwarf_file), it(dw.begin()) {}
 	Dwarf dw;
+	Dwarf::iterator it;
 };
 
 inline void DwarfTableFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
-	auto& dwarf_state = dynamic_cast<const DwarfFileState&>(*data.global_state);
-	(void)dwarf_state;
+	auto& dwarf_state = dynamic_cast<DwarfFileState&>(*data.global_state);
+	auto& it = dwarf_state.it;
+	auto& dw = dwarf_state.dw;
+	if (it == dw.end()) {
+		return;
+	}
+
+	int row = 0;
+	for (; row < STANDARD_VECTOR_SIZE && it != dw.end(); ++row, ++it) {
+		Dwarf::Die d = *it;
+		output.SetValue(0, row, d.tag);
+		output.SetValue(1, row, Value(int64_t(d.offset)));
+		output.SetValue(2, row, d.section);
+		output.SetValue(3, row, d.parent_die != -1 ? Value(int64_t(d.parent_die)) : Value());
+
+		vector<Value> attrs;
+		for (const auto& attr : d.attributes) {
+			auto s = Value::STRUCT({
+				{"dwarf_attr_key",attr.name},
+				{"dwarf_attr_value",attr.value},
+				{"dwarf_attr_form",attr.form}
+			});
+			attrs.push_back(s);
+		}
+		output.SetValue(4, row, Value::LIST(attrs));
+	}
+	output.SetCardinality(row);
 }
 
 unique_ptr<GlobalTableFunctionState> InitDwarfState(ClientContext &context, TableFunctionInitInput &input) {
