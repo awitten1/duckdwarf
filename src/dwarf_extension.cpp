@@ -96,7 +96,11 @@ inline void DwarfTableFunction(ClientContext &context, TableFunctionInput &data,
 			});
 			attrs.push_back(s);
 		}
-		output.SetValue(4, row, Value::LIST(attrs));
+		output.SetValue(4, row, Value::LIST(LogicalType::STRUCT({
+				{"dwarf_attr_key",LogicalType::VARCHAR},
+				{"dwarf_attr_value",LogicalType::VARCHAR},
+				{"dwarf_attr_form",LogicalType::VARCHAR}
+			}), attrs));
 	}
 	output.SetCardinality(row);
 }
