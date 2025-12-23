@@ -25,3 +25,15 @@ The main binaries that will be built are:
 --- On Mac you might need to run dsymutil on ./build/reldebug/duckdb for this to work.
 D from dwarf_info('./build/release/duckdb')
 ```
+
+A more interesting query:
+```
+PIVOT (
+  SELECT dwarf_tag, dwarf_offset, attr.dwarf_attr_key, attr.dwarf_attr_value
+  FROM (
+    SELECT *, unnest(dwarf_attributes) as attr
+    FROM dwarf_info('./test_dwarf')
+  )
+  WHERE dwarf_tag = 'DW_TAG_class_type'
+) ON dwarf_attr_key USING first(dwarf_attr_value);
+```

@@ -2,6 +2,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "dwarf.hpp"
 #define DUCKDB_EXTENSION_MAIN
 

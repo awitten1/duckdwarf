@@ -31,7 +31,6 @@ public:
 
 	class iterator {
 		std::vector<Dwarf_Die> die_stack_;
-		std::vector<Dwarf_Off> parent_stack_;
 		Dwarf_Debug dbg_;
 		bool is_end_ = false;
 		Dwarf_Unsigned next_cu_header_offset_ = 0;
@@ -40,7 +39,6 @@ public:
 		explicit iterator(bool is_end) : is_end_(is_end) {
 		}
 		explicit iterator(Dwarf_Debug dbg) : dbg_(dbg), is_end_(false) {
-
 			Dwarf_Unsigned cu_header_length = 0;
 			Dwarf_Half version_stamp = 0;
 			Dwarf_Off abbrev_offset = 0;
@@ -53,22 +51,23 @@ public:
 			Dwarf_Error error;
 
 			Dwarf_Die first_die;
-			int res = dwarf_next_cu_header_e(dbg_, true, &first_die, &cu_header_length, &version_stamp, &abbrev_offset,
-			                                 &address_size, &length_size, &extension_size, &type_signature, &typeoffset,
-			                                 &next_cu_header_offset_, &header_cu_type, &error);
+			int res = dwarf_next_cu_header_e(dbg_, true, &first_die, &cu_header_length, &version_stamp,
+			                                 &abbrev_offset, &address_size, &length_size, &extension_size,
+			                                 &type_signature, &typeoffset, &next_cu_header_offset_, &header_cu_type,
+			                                 &error);
 
-			if (res == DW_DLV_NO_ENTRY) {
-				is_end_ = true;
-				return;
-			}
-
-			if (res == DW_DLV_ERROR) {
+			if (res != DW_DLV_OK) {
 				is_end_ = true;
 				return;
 			}
 
 			die_stack_.push_back(first_die);
-			parent_stack_.push_back(-1);
+		}
+
+		~iterator() {
+			for (auto die : die_stack_) {
+				dwarf_dealloc_die(die);
+			}
 		}
 
 		Die operator*() {
@@ -76,15 +75,21 @@ public:
 
 			auto &current_die = die_stack_.back();
 			cppDie.tag = Dwarf::GetTagName(current_die);
-			cppDie.parent_die = parent_stack_.back();
 
 			Dwarf_Error error;
 			dwarf_dieoffset(current_die, &cppDie.offset, &error);
+
+			if (die_stack_.size() > 1) {
+				dwarf_dieoffset(die_stack_[die_stack_.size() - 2], &cppDie.parent_die, &error);
+			} else {
+				cppDie.parent_die = -1;
+			}
+
 			const char *sec_name = nullptr;
 			dwarf_get_die_section_name_b(current_die, &sec_name, &error);
 			cppDie.section = sec_name ? sec_name : "";
 
-			Dwarf::GetDieAttributes(current_die, cppDie.attributes);
+			Dwarf::GetDieAttributes(dbg_, current_die, cppDie.attributes);
 			return cppDie;
 		}
 
@@ -96,49 +101,37 @@ public:
 
 			Dwarf_Error error = 0;
 			auto current_die = die_stack_.back();
-			Dwarf_Off current_parent = parent_stack_.back();
-			Dwarf_Off current_offset;
-			dwarf_dieoffset(current_die, &current_offset, &error);
-
-			die_stack_.pop_back();
-			parent_stack_.pop_back();
 
 			Dwarf_Die child_die = 0;
 			int res = dwarf_child(current_die, &child_die, &error);
-
 			if (res == DW_DLV_OK) {
 				die_stack_.push_back(child_die);
-				parent_stack_.push_back(current_offset);
-				dwarf_dealloc_die(current_die);
 				return *this;
 			}
 
 			Dwarf_Die sibling_die = 0;
 			res = dwarf_siblingof_c(current_die, &sibling_die, &error);
-			dwarf_dealloc_die(current_die);
-
 			if (res == DW_DLV_OK) {
-				die_stack_.push_back(sibling_die);
-				parent_stack_.push_back(current_parent);
+				dwarf_dealloc_die(current_die);
+				die_stack_.back() = sibling_die;
 				return *this;
 			}
 
+			dwarf_dealloc_die(current_die);
+			die_stack_.pop_back();
+
 			while (!die_stack_.empty()) {
 				auto parent_die = die_stack_.back();
-				Dwarf_Off parent_parent = parent_stack_.back();
-
-				die_stack_.pop_back();
-				parent_stack_.pop_back();
 
 				Dwarf_Die parent_sibling = 0;
 				res = dwarf_siblingof_c(parent_die, &parent_sibling, &error);
-				dwarf_dealloc_die(parent_die);
-
 				if (res == DW_DLV_OK) {
-					die_stack_.push_back(parent_sibling);
-					parent_stack_.push_back(parent_parent);
+					dwarf_dealloc_die(parent_die);
+					die_stack_.back() = parent_sibling;
 					return *this;
 				}
+				dwarf_dealloc_die(parent_die);
+				die_stack_.pop_back();
 			}
 
 			Dwarf_Unsigned cu_header_length = 0;
@@ -152,13 +145,12 @@ public:
 			Dwarf_Half header_cu_type = 0;
 
 			Dwarf_Die next_cu_die;
-			res = dwarf_next_cu_header_e(dbg_, true, &next_cu_die, &cu_header_length, &version_stamp, &abbrev_offset,
-			                             &address_size, &length_size, &extension_size, &type_signature, &typeoffset,
-			                             &next_cu_header_offset_, &header_cu_type, &error);
+			res = dwarf_next_cu_header_e(dbg_, true, &next_cu_die, &cu_header_length, &version_stamp,
+			                             &abbrev_offset, &address_size, &length_size, &extension_size, &type_signature,
+			                             &typeoffset, &next_cu_header_offset_, &header_cu_type, &error);
 
 			if (res == DW_DLV_OK) {
 				die_stack_.push_back(next_cu_die);
-				parent_stack_.push_back(-1);
 				return *this;
 			}
 
@@ -176,30 +168,30 @@ public:
 	};
 
 	explicit Dwarf(const std::string &filename) : filename_(filename) {
-	}
-
-	iterator begin() const {
 		Dwarf_Error error = 0;
-		int res;
-
 		char true_path_out[4096];
 		Dwarf_Debug dbg;
 
-		res = dwarf_init_path(filename_.c_str(), true_path_out, sizeof(true_path_out), DW_GROUPNUMBER_ANY, NULL, NULL,
-		                      &dbg, &error);
+		int res = dwarf_init_path(filename_.c_str(), true_path_out, sizeof(true_path_out), DW_GROUPNUMBER_ANY, NULL,
+		                          NULL, &dbg, &error);
 
 		if (res == DW_DLV_ERROR) {
 			char *errmsg = dwarf_errmsg(error);
 			std::string err_str = errmsg ? errmsg : "Unknown error";
-			fprintf(stderr, "Error: %s\n", errmsg);
-			dwarf_dealloc_error(dbg, error);
 			throw std::runtime_error("Dwarf initialization failed: " + err_str);
 		}
 		if (res == DW_DLV_NO_ENTRY) {
 			throw std::runtime_error("File not found or not a supported object file: " + filename_);
 		}
+		dbg_ = dbg;
+	}
 
-		return iterator(dbg);
+	~Dwarf() {
+		dwarf_finish(dbg_);
+	}
+
+	iterator begin() const {
+		return iterator(dbg_);
 	}
 
 	iterator end() const {
@@ -208,8 +200,9 @@ public:
 
 private:
 	std::string filename_;
+	Dwarf_Debug dbg_;
 
-	static void GetDieAttributes(Dwarf_Die die, std::vector<Attribute> &out_attrs) {
+	static void GetDieAttributes(Dwarf_Debug dbg, Dwarf_Die die, std::vector<Attribute> &out_attrs) {
 		Dwarf_Attribute *attrbuf = 0;
 		Dwarf_Signed attrcount = 0;
 		Dwarf_Error error = 0;
@@ -244,6 +237,7 @@ private:
 			out_attrs.push_back(attr);
 			dwarf_dealloc_attribute(attrbuf[i]);
 		}
+		dwarf_dealloc(dbg, attrbuf, DW_DLA_LIST);
 	}
 
 	static std::string GetAttributeValue(Dwarf_Attribute attr, Dwarf_Half form) {
