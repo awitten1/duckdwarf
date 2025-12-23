@@ -23,17 +23,18 @@ The main binaries that will be built are:
 ## Running the extension
 ```
 --- On Mac you might need to run dsymutil on ./build/reldebug/duckdb for this to work.
-D from dwarf_info('./build/release/duckdb')
+D from dwarf_info('./build/reldebug/duckdb')
 ```
 
 A more interesting query:
 ```
-PIVOT (
-  SELECT dwarf_tag, dwarf_offset, attr.dwarf_attr_key, attr.dwarf_attr_value
-  FROM (
-    SELECT *, unnest(dwarf_attributes) as attr
-    FROM dwarf_info('./test_dwarf')
-  )
-  WHERE dwarf_tag = 'DW_TAG_class_type'
-) ON dwarf_attr_key USING first(dwarf_attr_value);
+create table die_attrs as
+  select * exclude(dwarf_attributes), unnest(dwarf_attributes,recursive:=true)
+  from dwarf_info('./build/reldebug/duckdb');
+
+pivot (
+  select dwarf_tag, dwarf_offset, dwarf_attr_key, dwarf_attr_value
+  from die_attrs
+  where dwarf_tag = 'DW_TAG_class_type'
+) on dwarf_attr_key using first(dwarf_attr_value);
 ```
